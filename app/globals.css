@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background-color: #F6F3ED;
+  color: #20242B;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(32,36,43,0.05) 1px, transparent 0);
+  background-size: 22px 22px;
+}
+
+.torn-top {
+  position: relative;
+}
+.torn-top::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background:
+    linear-gradient(135deg, #F6F3ED 50%, transparent 50%) 0 0 / 14px 14px repeat-x,
+    linear-gradient(-135deg, #F6F3ED 50%, transparent 50%) 0 0 / 14px 14px repeat-x;
+  background-color: transparent;
+  transform: translateY(-1px);
+}
+
+.redact-bar {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.redact-bar:active {
+  cursor: grabbing;
+}
+
+@keyframes pulse-hint {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(6px); }
+}
+.hint-arrow {
+  animation: pulse-hint 1.6s ease-in-out infinite;
+}
