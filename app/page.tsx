@@ -573,7 +573,7 @@ export default function Home() {
         )}
 
         <footer className="mt-16 pt-6 border-t border-line text-center text-xs text-ink2 font-mono">
-          Powered by Claude · SSAFY 16기 CS 스터디 자체 제작
+          Powered by Claude · SSAFY 18기 CS 스터디 자체 제작
         </footer>
       </div>
     </main>

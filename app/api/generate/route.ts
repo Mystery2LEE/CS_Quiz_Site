@@ -5,7 +5,7 @@ import { verifyToken, COOKIE_NAME } from "@/lib/auth";
 import { getRedis, INDEX_KEY, setKey } from "@/lib/redis";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 280;
 
 const CATEGORY_LABELS: Record<string, string> = {
   "computer-architecture": "컴퓨터구조 (캐시, 메모리 계층, RISC/CISC 등)",
