@@ -95,7 +95,7 @@ ${focus ? `추가 요청사항: ${focus}` : ""}
 
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4000,
+      max_tokens: Math.min(1200 + n * 900, 8000),
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     });
@@ -103,6 +103,12 @@ ${focus ? `추가 요청사항: ${focus}` : ""}
     const textBlock = msg.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       throw new Error("모델 응답에서 텍스트를 찾을 수 없습니다.");
+    }
+
+    if (msg.stop_reason === "max_tokens") {
+      throw new Error(
+        "생성 개수가 많아 응답이 중간에 잘렸습니다. 개수를 줄이거나(예: 5개 이하) 다시 시도해 주세요."
+      );
     }
 
     let cleaned = textBlock.text.trim();
