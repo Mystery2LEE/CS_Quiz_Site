@@ -3,19 +3,39 @@
 import { useEffect, useRef, useState } from "react";
 
 type Term = { term: string; definition: string };
-type Question = {
+
+type InterviewQuestion = {
   question: string;
   model_answer: string;
   follow_up: string;
   terms: Term[];
   tag: string;
 };
+type McqQuestion = {
+  question: string;
+  choices: string[];
+  answer_index: number;
+  explanation: string;
+  tag: string;
+};
+type WrittenQuestion = {
+  question: string;
+  model_answer: string;
+  key_points: string[];
+  tag: string;
+};
+type Question = InterviewQuestion & Partial<McqQuestion> & Partial<WrittenQuestion>;
+
+type Format = "interview" | "mcq" | "written";
+
 type QuestionSet = {
   id: string;
   createdAt: number;
   category: string;
   categoryLabel: string;
   difficulty: string;
+  format: Format;
+  formatLabel: string;
   questions: Question[];
 };
 
@@ -36,6 +56,12 @@ const DIFFICULTIES = [
   { id: "basic", label: "기초", desc: "개념 정의 위주" },
   { id: "intermediate", label: "중급", desc: "실무 연결·비교" },
   { id: "advanced", label: "심화", desc: "꼬리질문·트레이드오프" },
+];
+
+const FORMATS: { id: Format; label: string; desc: string }[] = [
+  { id: "interview", label: "면접형", desc: "질문 + 모범답안 + 꼬리질문" },
+  { id: "mcq", label: "객관식", desc: "4지선다, 클릭해서 정답 확인" },
+  { id: "written", label: "서술형", desc: "직접 써보고 모범답안과 비교" },
 ];
 
 function AnswerReveal({ text, label = "밀어서 정답 확인" }: { text: string; label?: string }) {
@@ -88,6 +114,118 @@ function AnswerReveal({ text, label = "밀어서 정답 확인" }: { text: strin
         <span className="hint-arrow font-mono text-sm">◀</span>
       </div>
     </div>
+  );
+}
+
+function McqBody({ q }: { q: Question }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const choices = q.choices || [];
+  const correct = q.answer_index ?? -1;
+
+  return (
+    <div>
+      <div className="space-y-2">
+        {choices.map((c, idx) => {
+          const isSelected = selected === idx;
+          const isCorrect = idx === correct;
+          const showState = selected !== null;
+          let cls = "border-line bg-paper hover:border-brand/50";
+          if (showState && isCorrect) cls = "border-green-600 bg-green-50";
+          else if (showState && isSelected && !isCorrect) cls = "border-red-600 bg-red-50";
+
+          return (
+            <button
+              key={idx}
+              onClick={() => setSelected(idx)}
+              disabled={selected !== null}
+              className={`w-full text-left rounded-md border px-4 py-2.5 text-sm text-ink transition-colors ${cls} disabled:cursor-default`}
+            >
+              <span className="font-mono text-xs text-ink2 mr-2">{String.fromCharCode(65 + idx)}</span>
+              {c}
+            </button>
+          );
+        })}
+      </div>
+      {selected !== null && (
+        <div className="mt-4 pt-4 border-t border-line/70">
+          <p className={`text-sm font-medium mb-1 ${selected === correct ? "text-green-700" : "text-red-700"}`}>
+            {selected === correct ? "정답입니다" : `오답입니다 — 정답은 ${String.fromCharCode(65 + correct)}`}
+          </p>
+          <p className="text-sm text-ink2">{q.explanation}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WrittenBody({ q }: { q: Question }) {
+  const [myAnswer, setMyAnswer] = useState("");
+  return (
+    <div>
+      <textarea
+        placeholder="여기에 직접 답을 작성해보세요 (선택)"
+        value={myAnswer}
+        onChange={(e) => setMyAnswer(e.target.value)}
+        rows={4}
+        className="w-full rounded-md border border-line px-3 py-2 bg-paper text-ink placeholder:text-ink2/50 resize-y mb-3"
+      />
+      <AnswerReveal text={q.model_answer} label="밀어서 모범답안 확인" />
+      {q.key_points && q.key_points.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-line/70">
+          <p className="text-xs font-mono text-ink2 uppercase tracking-wide mb-2">채점 포인트</p>
+          <ul className="space-y-1">
+            {q.key_points.map((k, i) => (
+              <li key={i} className="text-sm text-ink2 flex gap-2">
+                <span className="text-amber">·</span>
+                {k}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InterviewBody({ q }: { q: Question }) {
+  return (
+    <div>
+      <AnswerReveal text={q.model_answer} />
+      <div className="mt-4 pt-4 border-t border-line/70">
+        <p className="text-xs font-mono text-ink2 uppercase tracking-wide mb-1">꼬리질문</p>
+        <p className="text-sm text-ink2">{q.follow_up}</p>
+      </div>
+      {q.terms && q.terms.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {q.terms.map((t, ti) => (
+            <span
+              key={ti}
+              title={t.definition}
+              className="text-xs font-mono px-2 py-1 rounded bg-paper border border-line text-ink2 cursor-help"
+            >
+              {t.term}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestionCard({ q, format, index }: { q: Question; format: Format; index?: number }) {
+  return (
+    <article className="torn-top rounded-lg border border-line bg-white shadow-card p-6">
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <span className="font-mono text-xs text-amber tracking-wide">
+          {index !== undefined ? `Q${String(index + 1).padStart(2, "0")} · ` : ""}
+          {q.tag}
+        </span>
+      </div>
+      <p className="font-serif text-lg text-ink mb-4 leading-snug">{q.question}</p>
+      {format === "mcq" && <McqBody q={q} />}
+      {format === "written" && <WrittenBody q={q} />}
+      {format === "interview" && <InterviewBody q={q} />}
+    </article>
   );
 }
 
@@ -159,6 +297,7 @@ export default function Home() {
 
   const [category, setCategory] = useState(CATEGORIES[0].id);
   const [difficulty, setDifficulty] = useState("intermediate");
+  const [format, setFormat] = useState<Format>("interview");
   const [count, setCount] = useState(5);
   const [focus, setFocus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -215,7 +354,7 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, difficulty, count, focus }),
+        body: JSON.stringify({ category, difficulty, count, focus, format }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "생성 실패");
@@ -256,16 +395,30 @@ export default function Home() {
   }
 
   function exportMarkdown(set: QuestionSet) {
-    let md = `# ${set.categoryLabel} 면접 질문 (${set.difficulty})\n\n`;
+    let md = `# ${set.categoryLabel} 문제 (${set.formatLabel} · ${set.difficulty})\n\n`;
     set.questions.forEach((q, i) => {
       md += `## Q${i + 1}. ${q.question}\n\n`;
       md += `**태그**: ${q.tag}\n\n`;
-      md += `**모범답안**: ${q.model_answer}\n\n`;
-      md += `**꼬리질문**: ${q.follow_up}\n\n`;
-      if (q.terms?.length) {
-        md += `**용어**:\n`;
-        q.terms.forEach((t) => (md += `- ${t.term}: ${t.definition}\n`));
-        md += "\n";
+      if (set.format === "mcq") {
+        (q.choices || []).forEach((c, ci) => {
+          md += `- ${String.fromCharCode(65 + ci)}. ${c}${ci === q.answer_index ? " ✅" : ""}\n`;
+        });
+        md += `\n**해설**: ${q.explanation}\n\n`;
+      } else {
+        md += `**모범답안**: ${q.model_answer}\n\n`;
+        if (set.format === "interview") {
+          md += `**꼬리질문**: ${q.follow_up}\n\n`;
+          if (q.terms?.length) {
+            md += `**용어**:\n`;
+            q.terms.forEach((t) => (md += `- ${t.term}: ${t.definition}\n`));
+            md += "\n";
+          }
+        }
+        if (set.format === "written" && q.key_points?.length) {
+          md += `**채점 포인트**:\n`;
+          q.key_points.forEach((k) => (md += `- ${k}\n`));
+          md += "\n";
+        }
       }
       md += "---\n\n";
     });
@@ -345,21 +498,44 @@ export default function Home() {
               ))}
             </div>
 
-            <p className="font-mono text-xs tracking-widest text-ink2 uppercase mb-3">2. 난이도</p>
-            <div className="flex gap-2 mb-6">
-              {DIFFICULTIES.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => setDifficulty(d.id)}
-                  className={`rounded-md border px-4 py-2 text-sm transition-colors ${
-                    difficulty === d.id
-                      ? "border-amber bg-amber text-white"
-                      : "border-line bg-paper hover:border-amber/50 text-ink"
-                  }`}
-                >
-                  {d.label} <span className="opacity-70 text-xs">· {d.desc}</span>
-                </button>
-              ))}
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <p className="font-mono text-xs tracking-widest text-ink2 uppercase mb-3">2. 난이도</p>
+                <div className="flex flex-wrap gap-2">
+                  {DIFFICULTIES.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => setDifficulty(d.id)}
+                      className={`rounded-md border px-4 py-2 text-sm transition-colors ${
+                        difficulty === d.id
+                          ? "border-amber bg-amber text-white"
+                          : "border-line bg-paper hover:border-amber/50 text-ink"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="font-mono text-xs tracking-widest text-ink2 uppercase mb-3">3. 형식</p>
+                <div className="flex flex-wrap gap-2">
+                  {FORMATS.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setFormat(f.id)}
+                      title={f.desc}
+                      className={`rounded-md border px-4 py-2 text-sm transition-colors ${
+                        format === f.id
+                          ? "border-brand bg-brand text-white"
+                          : "border-line bg-paper hover:border-brand/50 text-ink"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-[120px_1fr] gap-4">
@@ -427,7 +603,12 @@ export default function Home() {
                 <div key={s.id} className="torn-top rounded-lg border border-line bg-white shadow-card p-5">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <span className="font-serif text-lg text-ink">{s.categoryLabel}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif text-lg text-ink">{s.categoryLabel}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand/10 text-brand border border-brand/30">
+                          {FORMATS.find((f) => f.id === s.format)?.label || "면접형"}
+                        </span>
+                      </div>
                       <div className="text-xs text-ink2 font-mono mt-1">
                         {DIFFICULTIES.find((d) => d.id === s.difficulty)?.label} · {s.questions.length}
                         문제 · {new Date(s.createdAt).toLocaleDateString("ko-KR")}
@@ -450,7 +631,7 @@ export default function Home() {
                       onClick={() => startInterview(s)}
                       className="flex-1 rounded-md bg-ink px-3 py-2 text-sm text-paper hover:bg-brand-dark transition-colors"
                     >
-                      모의면접
+                      한 문제씩 풀기
                     </button>
                   </div>
                 </div>
@@ -469,7 +650,8 @@ export default function Home() {
                 <h2 className="font-serif text-2xl text-ink">
                   {current.categoryLabel}{" "}
                   <span className="text-ink2 text-base font-sans">
-                    · {DIFFICULTIES.find((d) => d.id === current.difficulty)?.label}
+                    · {FORMATS.find((f) => f.id === current.format)?.label} ·{" "}
+                    {DIFFICULTIES.find((d) => d.id === current.difficulty)?.label}
                   </span>
                 </h2>
               </div>
@@ -478,7 +660,7 @@ export default function Home() {
                   onClick={() => startInterview(current)}
                   className="rounded-md border border-brand px-4 py-2 text-sm text-brand hover:bg-brand hover:text-white transition-colors"
                 >
-                  모의면접 모드
+                  한 문제씩 풀기
                 </button>
                 <button
                   onClick={() => exportMarkdown(current)}
@@ -491,32 +673,7 @@ export default function Home() {
 
             <div className="space-y-4">
               {current.questions.map((q, i) => (
-                <article key={i} className="torn-top rounded-lg border border-line bg-white shadow-card p-6">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <span className="font-mono text-xs text-amber tracking-wide">
-                      Q{String(i + 1).padStart(2, "0")} · {q.tag}
-                    </span>
-                  </div>
-                  <p className="font-serif text-lg text-ink mb-4 leading-snug">{q.question}</p>
-                  <AnswerReveal text={q.model_answer} />
-                  <div className="mt-4 pt-4 border-t border-line/70">
-                    <p className="text-xs font-mono text-ink2 uppercase tracking-wide mb-1">꼬리질문</p>
-                    <p className="text-sm text-ink2">{q.follow_up}</p>
-                  </div>
-                  {q.terms?.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {q.terms.map((t, ti) => (
-                        <span
-                          key={ti}
-                          title={t.definition}
-                          className="text-xs font-mono px-2 py-1 rounded bg-paper border border-line text-ink2 cursor-help"
-                        >
-                          {t.term}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </article>
+                <QuestionCard key={i} q={q} format={current.format} index={i} />
               ))}
             </div>
           </section>
@@ -541,17 +698,7 @@ export default function Home() {
               {interviewIdx + 1} / {current.questions.length}
             </div>
 
-            <article className="torn-top rounded-lg border border-line bg-white shadow-card p-8 text-center">
-              <span className="font-mono text-xs text-amber tracking-wide">
-                {current.questions[interviewIdx].tag}
-              </span>
-              <p className="font-serif text-2xl text-ink my-6 leading-relaxed">
-                {current.questions[interviewIdx].question}
-              </p>
-              <div className="text-left mt-6">
-                <AnswerReveal text={current.questions[interviewIdx].model_answer} label="밀어서 모범답안 확인" />
-              </div>
-            </article>
+            <QuestionCard q={current.questions[interviewIdx]} format={current.format} />
 
             <div className="mt-6 flex justify-center gap-3">
               <button
@@ -573,7 +720,7 @@ export default function Home() {
         )}
 
         <footer className="mt-16 pt-6 border-t border-line text-center text-xs text-ink2 font-mono">
-          Powered by Claude · SSAFY 18기 CS 스터디 자체 제작
+          Powered by Claude · SSAFY CS 스터디 자체 제작
         </footer>
       </div>
     </main>

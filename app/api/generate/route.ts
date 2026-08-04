@@ -20,6 +20,47 @@ const CATEGORY_LABELS: Record<string, string> = {
   "swe-general": "소프트웨어 공학/Git/API 설계",
 };
 
+const FORMAT_SCHEMAS: Record<string, string> = {
+  interview: `{
+  "questions": [
+    {
+      "question": "면접 질문 (한국어, 실제 면접에서 나올 법한 자연스러운 문장)",
+      "model_answer": "모범 답안 (3~6문장, 구체적이고 실무 연결된 설명)",
+      "follow_up": "꼬리질문 1개와 그에 대한 짧은 답변 방향",
+      "terms": [{"term": "핵심 용어", "definition": "한 줄 정의"}],
+      "tag": "질문 유형 태그 (예: 개념 확인, 비교 설명, 실무 적용, 트레이드오프)"
+    }
+  ]
+}`,
+  mcq: `{
+  "questions": [
+    {
+      "question": "객관식 질문 (한 가지 정답이 명확히 존재해야 함)",
+      "choices": ["보기1", "보기2", "보기3", "보기4"],
+      "answer_index": 0,
+      "explanation": "정답인 이유와 오답 보기들이 왜 틀렸는지에 대한 설명 (3~5문장)",
+      "tag": "질문 유형 태그 (예: 개념 확인, 비교 구분, 계산)"
+    }
+  ]
+}`,
+  written: `{
+  "questions": [
+    {
+      "question": "서술형 질문 (설명하시오/비교하시오/서술하시오 형태)",
+      "model_answer": "모범 답안 (5~8문장, 완결된 서술형 답안)",
+      "key_points": ["채점 시 반드시 들어가야 할 핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"],
+      "tag": "질문 유형 태그 (예: 개념 서술, 비교 서술, 설계 서술)"
+    }
+  ]
+}`,
+};
+
+const FORMAT_LABELS: Record<string, string> = {
+  interview: "면접형 (질문 + 모범답안 + 꼬리질문)",
+  mcq: "객관식 (4지선다, 정답 1개)",
+  written: "서술형 (직접 답을 작성한 뒤 모범답안과 비교)",
+};
+
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (!verifyToken(token)) {
@@ -36,16 +77,19 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { category, difficulty, count, focus } = body as {
+    const { category, difficulty, count, focus, format } = body as {
       category: string;
       difficulty: string;
       count: number;
       focus?: string;
+      format?: string;
     };
 
     if (!category || !CATEGORY_LABELS[category]) {
       return NextResponse.json({ error: "유효하지 않은 카테고리입니다." }, { status: 400 });
     }
+
+    const fmt = format && FORMAT_SCHEMAS[format] ? format : "interview";
 
     const n = Math.min(Math.max(Number(count) || 5, 1), 10);
     const difficultyLabel =
@@ -55,22 +99,20 @@ export async function POST(req: NextRequest) {
 
     const anthropic = new Anthropic({ apiKey });
 
-    const systemPrompt = `당신은 한국 IT 기업 데이터 직군(데이터 엔지니어/분석가/ML) 채용 면접관입니다.
-SSAFY 교육생 스터디를 위한 CS 면접 예상 질문을 생성합니다.
+    const formatInstruction =
+      fmt === "mcq"
+        ? "형식: 객관식(4지선다). 보기는 반드시 4개, 정답은 1개만 존재해야 하며 나머지 보기는 그럴듯하지만 명확히 틀린 오답이어야 합니다. answer_index는 0부터 시작하는 정답 보기의 인덱스입니다."
+        : fmt === "written"
+        ? "형식: 서술형. 실제 필기시험처럼 '설명하시오', '비교하시오', '차이를 서술하시오' 같은 문장으로 질문을 만드세요. key_points는 채점자가 답안에서 확인해야 할 핵심 요소 3~5개입니다."
+        : "형식: 면접형. 실제 면접관이 구두로 물어볼 법한 자연스러운 질문으로 만드세요.";
+
+    const systemPrompt = `당신은 한국 IT 기업 데이터 직군(데이터 엔지니어/분석가/ML) 채용 면접관 겸 CS 문제 출제자입니다.
+SSAFY 교육생 스터디를 위한 CS 문제를 생성합니다.
+${formatInstruction}
 반드시 아래 JSON 스키마를 따르는 순수 JSON만 출력하세요. 마크다운 코드블록이나 설명 문장을 절대 포함하지 마세요.
 
 스키마:
-{
-  "questions": [
-    {
-      "question": "면접 질문 (한국어, 실제 면접에서 나올 법한 자연스러운 문장)",
-      "model_answer": "모범 답안 (3~6문장, 구체적이고 실무 연결된 설명)",
-      "follow_up": "꼬리질문 1개와 그에 대한 짧은 답변 방향",
-      "terms": [{"term": "핵심 용어", "definition": "한 줄 정의"}],
-      "tag": "질문 유형 태그 (예: 개념 확인, 비교 설명, 실무 적용, 트레이드오프)"
-    }
-  ]
-}`;
+${FORMAT_SCHEMAS[fmt]}`;
 
     const hasMaterial = focus && focus.trim().length > 80;
 
@@ -79,19 +121,19 @@ SSAFY 교육생 스터디를 위한 CS 면접 예상 질문을 생성합니다.
 난이도: ${difficultyLabel}
 생성 개수: ${n}개
 
-아래는 참고 자료(스터디 정리본, 아티클 등)입니다. 이 자료의 내용을 반드시 기반으로 삼아 면접 질문을 만들어 주세요. 자료에 없는 내용을 지어내지 말고, 자료 안에서 다루는 개념·용어·사례를 정확히 반영하세요.
+아래는 참고 자료(스터디 정리본, 아티클 등)입니다. 이 자료의 내용을 반드시 기반으로 삼아 문제를 만들어 주세요. 자료에 없는 내용을 지어내지 말고, 자료 안에서 다루는 개념·용어·사례를 정확히 반영하세요.
 
 --- 참고 자료 시작 ---
 ${focus}
 --- 참고 자료 끝 ---
 
-위 자료를 바탕으로 CS 면접 예상 질문 ${n}개를 생성해 주세요. 질문끼리 겹치지 않게 자료의 여러 부분을 고르게 다루세요.`
+위 자료를 바탕으로 CS 문제 ${n}개를 생성해 주세요. 질문끼리 겹치지 않게 자료의 여러 부분을 고르게 다루세요.`
       : `카테고리: ${CATEGORY_LABELS[category]}
 난이도: ${difficultyLabel}
 생성 개수: ${n}개
 ${focus ? `추가 요청사항: ${focus}` : ""}
 
-위 조건에 맞는 CS 면접 예상 질문 ${n}개를 생성해 주세요. 질문끼리 겹치지 않게 다양한 세부 주제를 다루세요.`;
+위 조건에 맞는 CS 문제 ${n}개를 생성해 주세요. 질문끼리 겹치지 않게 다양한 세부 주제를 다루세요.`;
 
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -123,6 +165,8 @@ ${focus ? `추가 요청사항: ${focus}` : ""}
       category,
       categoryLabel: CATEGORY_LABELS[category],
       difficulty,
+      format: fmt,
+      formatLabel: FORMAT_LABELS[fmt],
       questions: parsed.questions,
     };
 
