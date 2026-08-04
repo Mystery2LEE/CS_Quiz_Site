@@ -72,7 +72,21 @@ SSAFY 교육생 스터디를 위한 CS 면접 예상 질문을 생성합니다.
   ]
 }`;
 
-    const userPrompt = `카테고리: ${CATEGORY_LABELS[category]}
+    const hasMaterial = focus && focus.trim().length > 80;
+
+    const userPrompt = hasMaterial
+      ? `카테고리: ${CATEGORY_LABELS[category]}
+난이도: ${difficultyLabel}
+생성 개수: ${n}개
+
+아래는 참고 자료(스터디 정리본, 아티클 등)입니다. 이 자료의 내용을 반드시 기반으로 삼아 면접 질문을 만들어 주세요. 자료에 없는 내용을 지어내지 말고, 자료 안에서 다루는 개념·용어·사례를 정확히 반영하세요.
+
+--- 참고 자료 시작 ---
+${focus}
+--- 참고 자료 끝 ---
+
+위 자료를 바탕으로 CS 면접 예상 질문 ${n}개를 생성해 주세요. 질문끼리 겹치지 않게 자료의 여러 부분을 고르게 다루세요.`
+      : `카테고리: ${CATEGORY_LABELS[category]}
 난이도: ${difficultyLabel}
 생성 개수: ${n}개
 ${focus ? `추가 요청사항: ${focus}` : ""}

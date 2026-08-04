@@ -362,7 +362,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="grid md:grid-cols-[120px_1fr] gap-4 items-end">
+            <div className="grid md:grid-cols-[120px_1fr] gap-4">
               <div>
                 <p className="font-mono text-xs tracking-widest text-ink2 uppercase mb-2">개수</p>
                 <input
@@ -375,15 +375,20 @@ export default function Home() {
                 />
               </div>
               <div>
-                <p className="font-mono text-xs tracking-widest text-ink2 uppercase mb-2">
-                  추가 요청 (선택)
-                </p>
-                <input
-                  type="text"
-                  placeholder="예: 실무 사례 중심으로, 최근 이슈 반영해서"
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-mono text-xs tracking-widest text-ink2 uppercase">
+                    참고 자료 / 추가 요청 (선택)
+                  </p>
+                  {focus.trim().length > 80 && (
+                    <span className="text-xs text-brand font-mono">이 내용을 기반으로 생성됨</span>
+                  )}
+                </div>
+                <textarea
+                  placeholder="짧은 요청: 예) 실무 사례 중심으로&#10;&#10;또는 정리본·아티클 텍스트를 통째로 붙여넣으면, 그 내용을 기반으로 질문을 만듭니다."
                   value={focus}
                   onChange={(e) => setFocus(e.target.value)}
-                  className="w-full rounded-md border border-line px-3 py-2 bg-paper text-ink placeholder:text-ink2/50"
+                  rows={4}
+                  className="w-full rounded-md border border-line px-3 py-2 bg-paper text-ink placeholder:text-ink2/50 resize-y"
                 />
               </div>
             </div>
