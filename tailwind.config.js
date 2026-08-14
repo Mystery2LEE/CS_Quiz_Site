@@ -4,27 +4,31 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        paper: "#F6F3ED",
-        ink: "#20242B",
-        ink2: "#4A5160",
+        paper: "#EEF0F4",
+        ink: "#14161F",
+        ink2: "#565C6B",
         brand: {
-          DEFAULT: "#2C4A7C",
-          light: "#3C61A0",
-          dark: "#1D3358",
+          DEFAULT: "#4338CA",
+          light: "#5B4FE0",
+          dark: "#332C99",
         },
         amber: {
-          DEFAULT: "#C77D2E",
-          light: "#E0994C",
+          DEFAULT: "#C08A22",
+          light: "#D9A63F",
         },
-        line: "#DCD5C7",
+        teal: {
+          DEFAULT: "#0F7A72",
+          light: "#189087",
+        },
+        line: "#D8DCE3",
       },
       fontFamily: {
-        serif: ["'Source Serif 4'", "ui-serif", "Georgia", "serif"],
+        serif: ["'Pretendard Variable'", "Pretendard", "-apple-system", "sans-serif"],
         sans: ["'Pretendard Variable'", "Pretendard", "-apple-system", "sans-serif"],
         mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
       },
       boxShadow: {
-        card: "0 1px 2px rgba(32,36,43,0.06), 0 8px 24px rgba(32,36,43,0.06)",
+        card: "0 1px 2px rgba(20,22,31,0.05), 0 10px 28px rgba(20,22,31,0.07)",
       },
     },
   },

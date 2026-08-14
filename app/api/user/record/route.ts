@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { verifyUserCookie, USER_COOKIE_NAME } from "@/lib/auth";
 import { getRedis, userHistoryKey, userWrongKey } from "@/lib/redis";
 
@@ -17,6 +18,7 @@ export type AttemptEntry = {
   selectedIndex?: number;
   correctIndex?: number;
   modelAnswer?: string;
+  fullQuestion?: unknown; // full question payload, so it can be retried later
 };
 
 export async function POST(req: NextRequest) {
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
     const wrongKey = userWrongKey(name);
 
     for (const entry of entries) {
-      const record = { ...entry, ts: Date.now() };
+      const record = { ...entry, id: crypto.randomUUID(), ts: Date.now() };
       const json = JSON.stringify(record);
       await redis.lpush(historyKey, json);
       if (entry.correct === false || entry.selfRated === "unknown") {

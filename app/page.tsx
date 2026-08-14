@@ -61,8 +61,22 @@ const DIFFICULTIES = [
 const FORMATS: { id: Format; label: string; desc: string }[] = [
   { id: "interview", label: "면접형", desc: "질문 + 모범답안 + 꼬리질문" },
   { id: "mcq", label: "객관식", desc: "4지선다, 클릭해서 정답 확인" },
-  { id: "written", label: "서술형", desc: "직접 써보고 모범답안과 비교" },
+  { id: "written", label: "빈칸/단답형", desc: "짧은 용어나 빈칸에 들어갈 말 맞히기" },
 ];
+
+const FORMAT_STYLES: Record<Format, { badge: string; tab: string }> = {
+  mcq: { badge: "bg-brand/10 text-brand border-brand/30", tab: "#4338CA" },
+  written: { badge: "bg-amber/10 text-amber border-amber/30", tab: "#C08A22" },
+  interview: { badge: "bg-teal/10 text-teal border-teal/30", tab: "#0F7A72" },
+};
+
+function FormatBadge({ format }: { format: Format }) {
+  const label = FORMATS.find((f) => f.id === format)?.label || format;
+  const style = FORMAT_STYLES[format];
+  return (
+    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${style.badge}`}>{label}</span>
+  );
+}
 
 function AnswerReveal({ text, label = "밀어서 정답 확인" }: { text: string; label?: string }) {
   const [revealed, setRevealed] = useState(false);
@@ -213,19 +227,19 @@ function WrittenBody({ q, controlled }: { q: Question; controlled?: AnswerContro
 
   return (
     <div>
-      <textarea
-        placeholder="여기에 직접 답을 작성해보세요 (선택)"
+      <input
+        type="text"
+        placeholder="빈칸에 들어갈 말을 적어보세요 (선택)"
         value={myAnswer}
         onChange={(e) => setMyAnswer(e.target.value)}
-        rows={4}
-        className="w-full rounded-md border border-line px-3 py-2 bg-paper text-ink placeholder:text-ink2/50 resize-y mb-3"
+        className="w-full rounded-md border border-line px-3 py-2 bg-paper text-ink placeholder:text-ink2/50 mb-3"
       />
       {showAnswer ? (
         <>
-          <AnswerReveal text={q.model_answer} label="밀어서 모범답안 확인" />
+          <AnswerReveal text={q.model_answer} label="밀어서 정답 확인" />
           {q.key_points && q.key_points.length > 0 && (
             <div className="mt-4 pt-4 border-t border-line/70">
-              <p className="text-xs font-mono text-ink2 uppercase tracking-wide mb-2">채점 포인트</p>
+              <p className="text-xs font-mono text-ink2 uppercase tracking-wide mb-2">관련 개념</p>
               <ul className="space-y-1">
                 {q.key_points.map((k, i) => (
                   <li key={i} className="text-sm text-ink2 flex gap-2">
@@ -239,7 +253,7 @@ function WrittenBody({ q, controlled }: { q: Question; controlled?: AnswerContro
           {controlled && <SelfRateButtons controlled={controlled} />}
         </>
       ) : (
-        <p className="text-xs text-ink2 font-mono">채점하기를 누르면 모범답안을 확인할 수 있어요.</p>
+        <p className="text-xs text-ink2 font-mono">채점하기를 누르면 정답을 확인할 수 있어요.</p>
       )}
     </div>
   );
@@ -310,12 +324,16 @@ function QuestionCard({
   answerControlled?: AnswerControlled;
 }) {
   return (
-    <article className="torn-top rounded-lg border border-line bg-white shadow-card p-6">
+    <article
+      className="torn-top rounded-lg border border-line bg-white shadow-card p-6"
+      style={{ borderLeftWidth: 4, borderLeftColor: FORMAT_STYLES[format].tab }}
+    >
       <div className="flex items-start justify-between gap-4 mb-3">
-        <span className="font-mono text-xs text-amber tracking-wide">
+        <span className="font-mono text-xs text-ink2 tracking-wide flex items-center gap-2">
           {index !== undefined ? `Q${String(index + 1).padStart(2, "0")} · ` : ""}
           {q.tag}
         </span>
+        <FormatBadge format={format} />
       </div>
       <p className="font-serif text-lg text-ink mb-4 leading-snug">{q.question}</p>
       {format === "mcq" && <McqBody q={q} controlled={mcqControlled} />}
@@ -480,7 +498,7 @@ export default function Home() {
   const [current, setCurrent] = useState<QuestionSet | null>(null);
   const [browseFilter, setBrowseFilter] = useState<string>("all");
 
-  const [mode, setMode] = useState<"browse" | "list" | "interview" | "library">("browse");
+  const [mode, setMode] = useState<"browse" | "list" | "interview" | "library" | "retry">("browse");
   const [interviewIdx, setInterviewIdx] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [timerOn, setTimerOn] = useState(false);
@@ -500,6 +518,12 @@ export default function Home() {
   const [libraryHistory, setLibraryHistory] = useState<any[]>([]);
   const [libraryWrong, setLibraryWrong] = useState<any[]>([]);
   const [libraryTab, setLibraryTab] = useState<"wrong" | "history">("wrong");
+
+  // 오답노트 문제 다시 풀기
+  const [retryEntry, setRetryEntry] = useState<any>(null);
+  const [retrySelected, setRetrySelected] = useState<number | null>(null);
+  const [retryGraded, setRetryGraded] = useState(false);
+  const [retrySelfRated, setRetrySelfRated] = useState<"known" | "unknown" | null>(null);
 
   async function refreshAuth() {
     const res = await fetch("/api/admin/check");
@@ -636,6 +660,7 @@ export default function Home() {
         correct: mcqAnswers[i] !== null ? mcqAnswers[i] === q.answer_index : null,
         selectedIndex: mcqAnswers[i] ?? undefined,
         correctIndex: q.answer_index,
+        fullQuestion: q,
       }));
       fetch("/api/user/record", {
         method: "POST",
@@ -664,6 +689,7 @@ export default function Home() {
       correct: null,
       selfRated: rating,
       modelAnswer: q.model_answer,
+      fullQuestion: q,
     };
     fetch("/api/user/record", {
       method: "POST",
@@ -671,6 +697,77 @@ export default function Home() {
       body: JSON.stringify({ entries: [entry] }),
     }).catch(() => {});
   }
+
+  async function deleteLibraryEntry(list: "history" | "wrong", id: string) {
+    const res = await fetch("/api/user/entry", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ list, id }),
+    });
+    if (res.ok) {
+      if (list === "history") setLibraryHistory((prev) => prev.filter((e) => e.id !== id));
+      else setLibraryWrong((prev) => prev.filter((e) => e.id !== id));
+    }
+  }
+
+  function openRetry(entry: any) {
+    setRetryEntry(entry);
+    setRetrySelected(null);
+    setRetryGraded(false);
+    setRetrySelfRated(null);
+    setMode("retry");
+  }
+
+  function gradeRetry() {
+    if (!retryEntry) return;
+    setRetryGraded(true);
+    if (retryEntry.format === "mcq" && userName) {
+      const q = retryEntry.fullQuestion;
+      const entry = {
+        setId: retryEntry.setId,
+        category: retryEntry.category,
+        categoryLabel: retryEntry.categoryLabel,
+        format: retryEntry.format,
+        index: retryEntry.index,
+        question: q.question,
+        tag: q.tag,
+        correct: retrySelected !== null ? retrySelected === q.answer_index : null,
+        selectedIndex: retrySelected ?? undefined,
+        correctIndex: q.answer_index,
+        fullQuestion: q,
+      };
+      fetch("/api/user/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries: [entry] }),
+      }).catch(() => {});
+    }
+  }
+
+  function rateRetry(rating: "known" | "unknown") {
+    setRetrySelfRated(rating);
+    if (!retryEntry || !userName) return;
+    const q = retryEntry.fullQuestion;
+    const entry = {
+      setId: retryEntry.setId,
+      category: retryEntry.category,
+      categoryLabel: retryEntry.categoryLabel,
+      format: retryEntry.format,
+      index: retryEntry.index,
+      question: q.question,
+      tag: q.tag,
+      correct: null,
+      selfRated: rating,
+      modelAnswer: q.model_answer,
+      fullQuestion: q,
+    };
+    fetch("/api/user/record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries: [entry] }),
+    }).catch(() => {});
+  }
+
 
   function exportMarkdown(set: QuestionSet) {
     let md = `# ${set.categoryLabel} 문제 (${set.formatLabel} · ${set.difficulty})\n\n`;
@@ -791,7 +888,7 @@ export default function Home() {
           />
         )}
 
-        {isAdmin && mode !== "interview" && mode !== "library" && (
+        {isAdmin && mode !== "interview" && mode !== "library" && mode !== "retry" && (
           <section className="mb-8 rounded-lg border border-line bg-white/60 p-6 shadow-card">
             <p className="font-mono text-xs tracking-widest text-ink2 uppercase mb-3">1. 카테고리</p>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-6">
@@ -944,14 +1041,16 @@ export default function Home() {
 
             <div className="grid md:grid-cols-2 gap-3">
               {filteredSets.map((s) => (
-                <div key={s.id} className="torn-top rounded-lg border border-line bg-white shadow-card p-5">
+                <div
+                  key={s.id}
+                  className="torn-top rounded-lg border border-line bg-white shadow-card p-5"
+                  style={{ borderLeftWidth: 4, borderLeftColor: FORMAT_STYLES[s.format].tab }}
+                >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-serif text-lg text-ink">{s.categoryLabel}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand/10 text-brand border border-brand/30">
-                          {FORMATS.find((f) => f.id === s.format)?.label || "면접형"}
-                        </span>
+                        <FormatBadge format={s.format} />
                       </div>
                       <div className="text-xs text-ink2 font-mono mt-1">
                         {DIFFICULTIES.find((d) => d.id === s.difficulty)?.label} · {s.questions.length}
@@ -1062,11 +1161,18 @@ export default function Home() {
                     {libraryTab === "wrong" ? "아직 오답노트가 비어있어요." : "아직 푼 문제 기록이 없어요."}
                   </div>
                 )}
-                {(libraryTab === "wrong" ? libraryWrong : libraryHistory).map((e, i) => (
-                  <div key={i} className="torn-top rounded-lg border border-line bg-white shadow-card p-4">
+                {(libraryTab === "wrong" ? libraryWrong : libraryHistory).map((e) => (
+                  <div
+                    key={e.id ?? `${e.ts}-${e.question}`}
+                    className="torn-top rounded-lg border border-line bg-white shadow-card p-4"
+                    style={{ borderLeftWidth: 4, borderLeftColor: FORMAT_STYLES[e.format as Format]?.tab }}
+                  >
                     <div className="flex items-center justify-between mb-1 gap-2">
-                      <span className="text-xs font-mono text-amber">
-                        {e.categoryLabel} · {e.tag}
+                      <span className="flex items-center gap-2">
+                        <FormatBadge format={e.format} />
+                        <span className="text-xs font-mono text-ink2">
+                          {e.categoryLabel} · {e.tag}
+                        </span>
                       </span>
                       <span className="text-[10px] font-mono text-ink2 shrink-0">
                         {e.ts ? new Date(e.ts).toLocaleString("ko-KR") : ""}
@@ -1089,10 +1195,84 @@ export default function Home() {
                         {e.selfRated === "known" ? "알고 있었음" : "몰랐음"}
                       </p>
                     )}
+                    <div className="mt-3 pt-3 border-t border-line/70 flex items-center gap-2">
+                      {libraryTab === "wrong" && e.fullQuestion && (
+                        <button
+                          onClick={() => openRetry(e)}
+                          className="text-xs rounded-md border border-brand text-brand px-3 py-1.5 hover:bg-brand hover:text-white transition-colors"
+                        >
+                          다시 풀기
+                        </button>
+                      )}
+                      <button
+                        onClick={() => e.id && deleteLibraryEntry(libraryTab, e.id)}
+                        className="text-xs rounded-md border border-line text-ink2 px-3 py-1.5 hover:border-red-600/60 hover:text-red-700 transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+          </section>
+        )}
+
+        {mode === "retry" && retryEntry && (
+          <section className="max-w-2xl mx-auto">
+            <button
+              onClick={() => {
+                setMode("library");
+                setRetryEntry(null);
+              }}
+              className="text-sm text-ink2 hover:text-ink mb-6 block"
+            >
+              ← 라이브러리로
+            </button>
+
+            <div className="mb-4 flex items-center gap-2">
+              <FormatBadge format={retryEntry.format} />
+              <span className="text-xs font-mono text-ink2">
+                {retryEntry.categoryLabel} · 오답노트 다시 풀기
+              </span>
+            </div>
+
+            <QuestionCard
+              q={retryEntry.fullQuestion}
+              format={retryEntry.format}
+              mcqControlled={
+                retryEntry.format === "mcq"
+                  ? { selected: retrySelected, revealed: retryGraded, onSelect: setRetrySelected }
+                  : undefined
+              }
+              answerControlled={
+                retryEntry.format !== "mcq"
+                  ? { revealed: retryGraded, selfRated: retrySelfRated, onRate: rateRetry }
+                  : undefined
+              }
+            />
+
+            <div className="mt-6 flex justify-center gap-3">
+              {!retryGraded ? (
+                <button
+                  onClick={retryEntry.format === "mcq" ? gradeRetry : () => setRetryGraded(true)}
+                  className="rounded-md bg-brand px-5 py-2 text-white hover:bg-brand-dark transition-colors"
+                >
+                  {retryEntry.format === "mcq" ? "채점하기" : "정답 확인하기"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setRetrySelected(null);
+                    setRetryGraded(false);
+                    setRetrySelfRated(null);
+                  }}
+                  className="rounded-md border border-brand px-5 py-2 text-brand hover:bg-brand hover:text-white transition-colors"
+                >
+                  다시 풀기
+                </button>
+              )}
+            </div>
           </section>
         )}
 
