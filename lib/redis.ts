@@ -17,3 +17,7 @@ export function getRedis(): Redis {
 
 export const INDEX_KEY = "cs-quiz:sets:index";
 export const setKey = (id: string) => `cs-quiz:sets:${id}`;
+
+export const userKey = (name: string) => `cs-quiz:user:${name}`;
+export const userHistoryKey = (name: string) => `cs-quiz:user:${name}:history`;
+export const userWrongKey = (name: string) => `cs-quiz:user:${name}:wrong`;
