@@ -698,7 +698,7 @@ export default function Home() {
               {interviewIdx + 1} / {current.questions.length}
             </div>
 
-            <QuestionCard q={current.questions[interviewIdx]} format={current.format} />
+            <QuestionCard key={interviewIdx} q={current.questions[interviewIdx]} format={current.format} />
 
             <div className="mt-6 flex justify-center gap-3">
               <button
