@@ -46,6 +46,9 @@ function statusOf(r: QResult): { text: string; cls: string } {
   if (r.verdict === "pending") {
     return { text: "자기 채점이 필요합니다 — 모범답안과 비교해 아래에서 골라주세요.", cls: "text-amber" };
   }
+  if (r.correct && r.blanks.some((b) => !b.correct)) {
+    return { text: `정답으로 인정했습니다 (${pts})`, cls: "text-green-700" };
+  }
   if (r.correct) return { text: `정답입니다 (${pts})`, cls: "text-green-700" };
   if (r.score > 0) return { text: `부분 정답 (${pts})`, cls: "text-amber" };
   return { text: `오답입니다 (${pts})`, cls: "text-red-700" };

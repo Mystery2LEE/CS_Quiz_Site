@@ -822,6 +822,12 @@ export default function Home() {
             </p>
           </div>
           <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+            <a
+              href="/cert"
+              className="text-xs font-mono text-brand hover:text-brand-dark border border-brand/40 rounded-md px-3 py-2"
+            >
+              정처기 실기
+            </a>
             {userChecked &&
               (userName ? (
                 <>
