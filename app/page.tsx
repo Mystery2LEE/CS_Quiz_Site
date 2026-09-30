@@ -70,6 +70,60 @@ const FORMAT_STYLES: Record<Format, { badge: string; tab: string }> = {
   interview: { badge: "bg-teal/10 text-teal border-teal/30", tab: "#0F7A72" },
 };
 
+// 저장된 categoryLabel은 생성 프롬프트용 긴 문구라서, 화면에는 짧은 이름을 쓴다
+function categoryName(id: string, fallback?: string) {
+  return CATEGORIES.find((c) => c.id === id)?.label || fallback || id;
+}
+
+function FilterChip({
+  active,
+  dim,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  dim?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`shrink-0 whitespace-nowrap text-xs font-mono rounded-md border px-3 py-1.5 transition-colors ${
+        active
+          ? "border-brand bg-brand text-white"
+          : `border-line hover:border-brand/50 ${dim ? "text-ink2/50" : "text-ink2"}`
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 px-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div role="dialog" aria-modal="true" className="bg-white rounded-lg shadow-card p-6 w-full max-w-sm">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function FormatBadge({ format }: { format: Format }) {
   const label = FORMATS.find((f) => f.id === format)?.label || format;
   const style = FORMAT_STYLES[format];
@@ -370,8 +424,7 @@ function LoginModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
   }
 
   return (
-    <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-lg shadow-card p-6 w-full max-w-sm">
+    <Modal onClose={onClose}>
         <h3 className="font-serif text-xl text-ink mb-1">관리자 로그인</h3>
         <p className="text-sm text-ink2 mb-4">문제 생성 권한이 있는 관리자만 로그인할 수 있습니다.</p>
         <input
@@ -399,8 +452,7 @@ function LoginModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
             {loading ? "확인 중…" : "로그인"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -436,8 +488,7 @@ function UserAuthModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-lg shadow-card p-6 w-full max-w-sm">
+    <Modal onClose={onClose}>
         <h3 className="font-serif text-xl text-ink mb-1">내 계정</h3>
         <p className="text-sm text-ink2 mb-4">
           이름과 PIN(숫자 4~6자리)을 입력하세요. 처음 쓰는 이름이면 자동으로 계정이 만들어져요.
@@ -475,8 +526,7 @@ function UserAuthModal({
             {loading ? "확인 중…" : "로그인 / 가입"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -497,6 +547,11 @@ export default function Home() {
   const [setsLoading, setSetsLoading] = useState(true);
   const [current, setCurrent] = useState<QuestionSet | null>(null);
   const [browseFilter, setBrowseFilter] = useState<string>("all");
+  const [formatFilter, setFormatFilter] = useState<"all" | Format>("all");
+  const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
+  const [unsolvedOnly, setUnsolvedOnly] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
 
   const [mode, setMode] = useState<"browse" | "list" | "interview" | "library" | "retry">("browse");
   const [interviewIdx, setInterviewIdx] = useState(0);
@@ -554,6 +609,9 @@ export default function Home() {
   async function userLogout() {
     await fetch("/api/user/logout", { method: "POST" });
     setUserName(null);
+    setLibraryHistory([]);
+    setLibraryWrong([]);
+    setUnsolvedOnly(false);
     if (mode === "library") setMode("browse");
   }
 
@@ -574,7 +632,54 @@ export default function Home() {
     refreshUser();
   }, []);
 
-  const filteredSets = browseFilter === "all" ? sets : sets.filter((s) => s.category === browseFilter);
+  // 문제 은행으로 돌아올 때마다 내 풀이 기록을 다시 읽어 세트별 진행 표시를 갱신한다
+  useEffect(() => {
+    if (mode === "browse" && userName) loadLibrary();
+  }, [mode, userName]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // 세트별 내 풀이 현황: 문항마다 가장 최근 기록만 센다 (기록은 최신순)
+  const setStatus = new Map<string, { answered: number; good: number }>();
+  const seenAttempts = new Set<string>();
+  for (const e of libraryHistory) {
+    if (!e?.setId || typeof e.index !== "number") continue;
+    const good = e.correct === true || e.selfRated === "known";
+    const bad = e.correct === false || e.selfRated === "unknown";
+    if (!good && !bad) continue;
+    const k = `${e.setId}:${e.index}`;
+    if (seenAttempts.has(k)) continue;
+    seenAttempts.add(k);
+    const st = setStatus.get(e.setId) || { answered: 0, good: 0 };
+    st.answered += 1;
+    if (good) st.good += 1;
+    setStatus.set(e.setId, st);
+  }
+
+  const categoryCounts = new Map<string, number>();
+  for (const s of sets) categoryCounts.set(s.category, (categoryCounts.get(s.category) || 0) + 1);
+
+  const filteredSets = sets.filter(
+    (s) =>
+      (browseFilter === "all" || s.category === browseFilter) &&
+      (formatFilter === "all" || s.format === formatFilter) &&
+      (difficultyFilter === "all" || s.difficulty === difficultyFilter) &&
+      (!unsolvedOnly || !setStatus.has(s.id))
+  );
+  const filteredQuestionCount = filteredSets.reduce((acc, s) => acc + s.questions.length, 0);
+  const filtersActive =
+    browseFilter !== "all" || formatFilter !== "all" || difficultyFilter !== "all" || unsolvedOnly;
+
+  function resetFilters() {
+    setBrowseFilter("all");
+    setFormatFilter("all");
+    setDifficultyFilter("all");
+    setUnsolvedOnly(false);
+  }
 
   const mcqScore =
     current && current.format === "mcq"
@@ -616,14 +721,17 @@ export default function Home() {
   }
 
   async function deleteSet(id: string) {
-    if (!confirm("이 문제 세트를 삭제할까요? 팀원 전체에게서 사라집니다.")) return;
-    const res = await fetch(`/api/sets/${id}`, { method: "DELETE" });
-    if (res.ok) {
+    setConfirmDeleteId(null);
+    const res = await fetch(`/api/sets/${id}`, { method: "DELETE" }).catch(() => null);
+    if (res?.ok) {
       setSets((prev) => prev.filter((s) => s.id !== id));
       if (current?.id === id) {
         setCurrent(null);
         setMode("browse");
       }
+      setToast("세트를 삭제했어요.");
+    } else {
+      setToast("세트를 삭제하지 못했어요. 다시 시도해 주세요.");
     }
   }
 
@@ -797,8 +905,10 @@ export default function Home() {
       }
       md += "---\n\n";
     });
-    navigator.clipboard.writeText(md);
-    alert("마크다운으로 복사했습니다. Notion에 붙여넣으세요.");
+    navigator.clipboard.writeText(md).then(
+      () => setToast("마크다운으로 복사했어요. Notion에 붙여넣으세요."),
+      () => setToast("복사하지 못했어요. 브라우저의 클립보드 권한을 확인해 주세요.")
+    );
   }
 
   async function logout() {
@@ -809,7 +919,7 @@ export default function Home() {
   return (
     <main className="min-h-screen px-4 py-10 md:px-8 lg:px-16">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-10 flex items-end justify-between border-b border-line pb-6">
+        <header className="mb-8 flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="font-mono text-xs tracking-widest text-amber uppercase mb-2">
               SSAFY 데이터 트랙 · CS 스터디
@@ -821,7 +931,13 @@ export default function Home() {
                 : "등록된 문제를 풀어보세요. 문제 생성은 관리자만 가능합니다."}
             </p>
           </div>
-          <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+          <nav className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+            <a
+              href="/cert"
+              className="text-xs font-mono text-brand hover:text-brand-dark border border-brand/40 rounded-md px-3 py-2"
+            >
+              정처기 실기
+            </a>
             {userChecked &&
               (userName ? (
                 <>
@@ -849,23 +965,7 @@ export default function Home() {
                   로그인
                 </button>
               ))}
-            {authChecked &&
-              (isAdmin ? (
-                <button
-                  onClick={logout}
-                  className="text-xs font-mono text-ink2 hover:text-ink border border-line rounded-md px-3 py-2"
-                >
-                  관리자 로그아웃
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowLogin(true)}
-                  className="text-xs font-mono text-ink2 hover:text-ink border border-line rounded-md px-3 py-2"
-                >
-                  관리자 로그인
-                </button>
-              ))}
-          </div>
+          </nav>
         </header>
 
         {showLogin && (
@@ -998,72 +1098,156 @@ export default function Home() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-serif text-2xl text-ink">등록된 문제 은행</h2>
-              <span className="text-xs font-mono text-ink2">{filteredSets.length}개 세트</span>
+              <span className="text-xs font-mono text-ink2">
+                {filteredSets.length}개 세트 · {filteredQuestionCount}문제
+              </span>
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-5">
-              <button
-                onClick={() => setBrowseFilter("all")}
-                className={`text-xs font-mono rounded-md border px-3 py-1.5 transition-colors ${
-                  browseFilter === "all"
-                    ? "border-brand bg-brand text-white"
-                    : "border-line text-ink2 hover:border-brand/50"
-                }`}
-              >
-                전체
-              </button>
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setBrowseFilter(c.id)}
-                  className={`text-xs font-mono rounded-md border px-3 py-1.5 transition-colors ${
-                    browseFilter === c.id
-                      ? "border-brand bg-brand text-white"
-                      : "border-line text-ink2 hover:border-brand/50"
-                  }`}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <div className="mb-5 space-y-2">
+              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+                <FilterChip active={browseFilter === "all"} onClick={() => setBrowseFilter("all")}>
+                  전체 {sets.length}
+                </FilterChip>
+                {CATEGORIES.map((c) => {
+                  const n = categoryCounts.get(c.id) || 0;
+                  return (
+                    <FilterChip
+                      key={c.id}
+                      active={browseFilter === c.id}
+                      dim={n === 0}
+                      onClick={() => setBrowseFilter(c.id)}
+                    >
+                      {c.label} {n}
+                    </FilterChip>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-mono text-ink2 mr-1">형식</span>
+                  <FilterChip active={formatFilter === "all"} onClick={() => setFormatFilter("all")}>
+                    전체
+                  </FilterChip>
+                  {FORMATS.map((f) => (
+                    <FilterChip key={f.id} active={formatFilter === f.id} onClick={() => setFormatFilter(f.id)}>
+                      {f.label}
+                    </FilterChip>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-mono text-ink2 mr-1">난이도</span>
+                  <FilterChip active={difficultyFilter === "all"} onClick={() => setDifficultyFilter("all")}>
+                    전체
+                  </FilterChip>
+                  {DIFFICULTIES.map((d) => (
+                    <FilterChip
+                      key={d.id}
+                      active={difficultyFilter === d.id}
+                      onClick={() => setDifficultyFilter(d.id)}
+                    >
+                      {d.label}
+                    </FilterChip>
+                  ))}
+                </div>
+                {userName && (
+                  <FilterChip active={unsolvedOnly} onClick={() => setUnsolvedOnly((v) => !v)}>
+                    안 푼 세트만
+                  </FilterChip>
+                )}
+              </div>
             </div>
 
             {setsLoading && <p className="text-ink2 text-sm">불러오는 중…</p>}
 
             {!setsLoading && filteredSets.length === 0 && (
               <div className="rounded-lg border border-dashed border-line p-10 text-center text-ink2">
-                {sets.length === 0
-                  ? isAdmin
-                    ? "아직 등록된 문제가 없습니다. 위에서 첫 문제를 생성해보세요."
-                    : "아직 등록된 문제가 없습니다. 관리자가 문제를 등록할 때까지 기다려주세요."
-                  : "이 목차에는 아직 등록된 문제가 없습니다."}
+                {sets.length === 0 ? (
+                  isAdmin ? (
+                    "아직 등록된 문제가 없습니다. 위에서 첫 문제를 생성해보세요."
+                  ) : (
+                    "아직 등록된 문제가 없습니다. 관리자가 문제를 등록할 때까지 기다려주세요."
+                  )
+                ) : (
+                  <>
+                    <p>조건에 맞는 세트가 없습니다.</p>
+                    {filtersActive && (
+                      <button
+                        onClick={resetFilters}
+                        className="mt-3 text-sm text-brand underline underline-offset-2 hover:text-brand-dark"
+                      >
+                        필터 초기화
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
             <div className="grid md:grid-cols-2 gap-3">
-              {filteredSets.map((s) => (
+              {filteredSets.map((s) => {
+                const st = setStatus.get(s.id);
+                const total = s.questions.length;
+                return (
                 <div
                   key={s.id}
-                  className="torn-top rounded-lg border border-line bg-white shadow-card p-5"
+                  className="torn-top flex flex-col rounded-lg border border-line bg-white shadow-card p-5"
                   style={{ borderLeftWidth: 4, borderLeftColor: FORMAT_STYLES[s.format].tab }}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-serif text-lg text-ink">{s.categoryLabel}</span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-serif text-lg text-ink">{categoryName(s.category, s.categoryLabel)}</span>
                         <FormatBadge format={s.format} />
+                        {st && (
+                          <span
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                              st.good >= total
+                                ? "border-green-600/40 bg-green-50 text-green-700"
+                                : "border-line bg-paper text-ink2"
+                            }`}
+                          >
+                            {s.format === "mcq" ? "정답" : "아는 문제"} {st.good}/{total}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-ink2 font-mono mt-1">
-                        {DIFFICULTIES.find((d) => d.id === s.difficulty)?.label} · {s.questions.length}
+                        {DIFFICULTIES.find((d) => d.id === s.difficulty)?.label} · {total}
                         문제 · {new Date(s.createdAt).toLocaleDateString("ko-KR")}
                       </div>
                     </div>
-                    {isAdmin && (
-                      <button onClick={() => deleteSet(s.id)} className="text-xs text-red-700/70 hover:text-red-700">
+                    {isAdmin && confirmDeleteId !== s.id && (
+                      <button
+                        onClick={() => setConfirmDeleteId(s.id)}
+                        className="shrink-0 text-xs text-red-700/70 hover:text-red-700"
+                      >
                         삭제
                       </button>
                     )}
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  {s.questions[0] && (
+                    <p className="text-sm text-ink2 leading-snug line-clamp-2">
+                      {s.questions[0].question}
+                      {total > 1 && <span className="text-ink2/60"> 외 {total - 1}문제</span>}
+                    </p>
+                  )}
+                  {isAdmin && confirmDeleteId === s.id && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-red-600/30 bg-red-50 px-3 py-2">
+                      <span className="flex-1 text-xs text-red-700">삭제하면 팀원 전체에게서 사라집니다.</span>
+                      <button
+                        onClick={() => deleteSet(s.id)}
+                        className="text-xs rounded-md bg-red-700 px-3 py-1.5 text-white hover:bg-red-800"
+                      >
+                        삭제
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-xs rounded-md border border-line bg-white px-3 py-1.5 text-ink2 hover:border-ink"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-auto pt-3">
                     <button
                       onClick={() => openSet(s)}
                       className="flex-1 rounded-md border border-line px-3 py-2 text-sm text-ink hover:border-brand hover:text-brand transition-colors"
@@ -1078,20 +1262,21 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
 
         {mode === "list" && current && (
           <section>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
               <div>
                 <button onClick={() => setMode("browse")} className="text-sm text-ink2 hover:text-ink mb-2 block">
                   ← 문제 은행으로
                 </button>
                 <h2 className="font-serif text-2xl text-ink">
-                  {current.categoryLabel}{" "}
+                  {categoryName(current.category, current.categoryLabel)}{" "}
                   <span className="text-ink2 text-base font-sans">
                     · {FORMATS.find((f) => f.id === current.format)?.label} ·{" "}
                     {DIFFICULTIES.find((d) => d.id === current.difficulty)?.label}
@@ -1171,7 +1356,7 @@ export default function Home() {
                       <span className="flex items-center gap-2">
                         <FormatBadge format={e.format} />
                         <span className="text-xs font-mono text-ink2">
-                          {e.categoryLabel} · {e.tag}
+                          {categoryName(e.category, e.categoryLabel)} · {e.tag}
                         </span>
                       </span>
                       <span className="text-[10px] font-mono text-ink2 shrink-0">
@@ -1233,7 +1418,7 @@ export default function Home() {
             <div className="mb-4 flex items-center gap-2">
               <FormatBadge format={retryEntry.format} />
               <span className="text-xs font-mono text-ink2">
-                {retryEntry.categoryLabel} · 오답노트 다시 풀기
+                {categoryName(retryEntry.category, retryEntry.categoryLabel)} · 오답노트 다시 풀기
               </span>
             </div>
 
@@ -1373,8 +1558,25 @@ export default function Home() {
         )}
 
         <footer className="mt-16 pt-6 border-t border-line text-center text-xs text-ink2 font-mono">
-          Powered by Claude · SSAFY CS 스터디 자체 제작
+          <p>Powered by Claude · SSAFY CS 스터디 자체 제작</p>
+          {authChecked && (
+            <button
+              onClick={isAdmin ? logout : () => setShowLogin(true)}
+              className="mt-2 text-ink2/70 hover:text-ink underline underline-offset-2"
+            >
+              {isAdmin ? "관리자 로그아웃" : "관리자 로그인"}
+            </button>
+          )}
         </footer>
+
+        {toast && (
+          <div
+            role="status"
+            className="fixed bottom-6 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-md bg-ink px-4 py-2.5 text-sm text-paper shadow-card"
+          >
+            {toast}
+          </div>
+        )}
       </div>
     </main>
   );
