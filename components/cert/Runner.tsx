@@ -288,6 +288,7 @@ export function Runner({ questions, mode, title, backHref, backLabel, sid, endsA
   const result = results[q.id];
   const solved = Object.values(results);
   const showTopics = questions.some((x) => x.topic);
+  const single = questions.length === 1; // 단일 문제 페이지: 문항 이동 UI를 숨긴다
 
   return (
     <section className="max-w-3xl mx-auto">
@@ -311,7 +312,11 @@ export function Runner({ questions, mode, title, backHref, backLabel, sid, endsA
         )}
       </div>
 
-      <div className="mb-4 rounded-lg border border-line bg-white/60 p-3 max-h-40 overflow-y-auto">
+      <div
+        className={`mb-4 rounded-lg border border-line bg-white/60 p-3 max-h-40 overflow-y-auto ${
+          single ? "hidden" : ""
+        }`}
+      >
         <div className="flex flex-wrap gap-1.5">
           {questions.map((x, i) => (
             <span key={x.id} className="contents">
@@ -333,7 +338,7 @@ export function Runner({ questions, mode, title, backHref, backLabel, sid, endsA
         </div>
       </div>
 
-      <div className="text-center mb-2 font-mono text-xs text-ink2">
+      <div className={`text-center mb-2 font-mono text-xs text-ink2 ${single ? "hidden" : ""}`}>
         {idx + 1} / {questions.length}
         {q.topic ? ` · ${q.topic}` : ""}
       </div>
@@ -356,7 +361,7 @@ export function Runner({ questions, mode, title, backHref, backLabel, sid, endsA
         <button
           disabled={idx === 0}
           onClick={() => setIdx((i) => i - 1)}
-          className="rounded-md border border-line px-5 py-2 text-ink2 disabled:opacity-30"
+          className={`rounded-md border border-line px-5 py-2 text-ink2 disabled:opacity-30 ${single ? "hidden" : ""}`}
         >
           이전
         </button>
@@ -387,7 +392,7 @@ export function Runner({ questions, mode, title, backHref, backLabel, sid, endsA
         <button
           disabled={idx === questions.length - 1}
           onClick={() => setIdx((i) => i + 1)}
-          className="rounded-md bg-ink px-5 py-2 text-paper disabled:opacity-30"
+          className={`rounded-md bg-ink px-5 py-2 text-paper disabled:opacity-30 ${single ? "hidden" : ""}`}
         >
           다음 문제
         </button>
