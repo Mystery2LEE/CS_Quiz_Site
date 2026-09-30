@@ -25,7 +25,7 @@ type Props = {
   initialInputs?: Record<string, string[]>;
 };
 
-async function postJson(url: string, body: unknown, method = "POST") {
+export async function postJson(url: string, body: unknown, method = "POST") {
   const res = await fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },

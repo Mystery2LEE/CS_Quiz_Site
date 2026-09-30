@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/cert/session";
 import { allQuestions, SETS, SUBJECTS } from "@/lib/cert/data";
 import { getSessions, getStats, getWrongIds } from "@/lib/cert/store";
 import { fmtDate, progressOf } from "@/lib/cert/progress";
+import { endlessPool } from "@/lib/cert/endless";
+import { ENDLESS_EXCLUDED_YEARS } from "@/lib/cert/public";
 
 const pct = (n: number | null) => (n === null ? "—" : `${n}%`);
 
@@ -17,6 +19,7 @@ export default async function CertHome() {
   const exams = SETS.filter((s) => s.kind === "exam");
   const examCount = allQuestions().filter((q) => exams.some((s) => s.id === q.setId)).length;
   const lastMock = sessions.find((s) => s.type === "mock");
+  const endlessCount = endlessPool({ source: "all", subject: null }).length;
 
   const cards = [
     {
@@ -27,6 +30,12 @@ export default async function CertHome() {
     },
     { href: "/cert/subject", title: "과목별", desc: `${SUBJECTS.length}과목 · 필터·섞기`, tab: "#C08A22" },
     { href: "/cert/mock", title: "랜덤 모의고사", desc: "20문항 · 150분 타이머 · 합격 판정", tab: "#0F7A72" },
+    {
+      href: "/cert/endless",
+      title: "무한 풀기",
+      desc: `${endlessCount}문항 · 무작위로 끝없이 · ${ENDLESS_EXCLUDED_YEARS.join("·")}년 기출 제외`,
+      tab: "#5B4FE0",
+    },
     { href: "/cert/wrong", title: "오답노트", desc: `${wrongIds.length}문항 · 다시 풀기·메모`, tab: "#14161F" },
   ];
 

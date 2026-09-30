@@ -12,6 +12,7 @@ const LINKS = [
   },
   { href: "/cert/subject", label: "과목별", match: (p: string) => p.startsWith("/cert/subject") },
   { href: "/cert/mock", label: "랜덤 모의고사", match: (p: string) => p.startsWith("/cert/mock") },
+  { href: "/cert/endless", label: "무한 풀기", match: (p: string) => p.startsWith("/cert/endless") },
   { href: "/cert/wrong", label: "오답노트", match: (p: string) => p.startsWith("/cert/wrong") },
   { href: "/cert/search", label: "검색", match: (p: string) => p.startsWith("/cert/search") },
 ];
