@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const redis = getRedis();
-    const rawHistory = (await redis.lrange(userHistoryKey(name), 0, 99)) || [];
+    // 세트별 풀이 현황 계산에 쓰이므로 저장된 기록(최대 300개)을 모두 내려준다
+    const rawHistory = (await redis.lrange(userHistoryKey(name), 0, 299)) || [];
     const rawWrong = (await redis.lrange(userWrongKey(name), 0, 99)) || [];
     return NextResponse.json({
       name,
