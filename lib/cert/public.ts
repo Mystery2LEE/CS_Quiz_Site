@@ -50,6 +50,9 @@ export interface SessionSummary {
 
 export const EXAM_MINUTES = 150;
 
+// 무한 풀기에서 빼는 기출 연도
+export const ENDLESS_EXCLUDED_YEARS = [2025, 2026];
+
 export const MODE_LABELS: Record<AnswerMode, string> = {
   short: "단답형",
   output: "실행 결과",
