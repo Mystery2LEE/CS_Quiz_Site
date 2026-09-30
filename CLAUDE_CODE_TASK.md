@@ -12,9 +12,9 @@
 
 | 경로 | 내용 |
 |---|---|
-| `data/cert/questions.json` | 문제 511개 — 기출 16회분 318문항(2020년 1회 ~ 2024년 3회, 2020년 4·5회는 통합 1회분, 2024년 1회는 복원된 18문항) + 유형별 워크북 8종 193문항. 스키마는 `lib/cert/types.ts` (약 1.1MB → **서버에서만 import**, 클라이언트 번들에 넣지 말 것) |
+| `data/cert/questions.json` | 문제 591개 — 기출 20회분 398문항(2020년 1회 ~ 2026년 1회, 2020년 4·5회는 통합 1회분, 2024년 1회는 복원된 18문항) + 유형별 워크북 8종 193문항. 스키마는 `lib/cert/types.ts` (약 1.1MB → **서버에서만 import**, 클라이언트 번들에 넣지 말 것) |
 | `data/cert/sets.json` | 과목 목록 + 세트(회차/워크북) 목록 |
-| `public/cert/images/*.png` | 표·그림이 있는 문제의 원본 크롭 이미지 (84장) |
+| `public/cert/images/*.png` | 표·그림이 있는 문제의 원본 크롭 이미지 (105장) |
 | `lib/cert/types.ts` | 타입 정의 — **수정하지 말고 그대로 사용** |
 | `lib/cert/grade.ts` | 채점 로직 (검증 완료) — **그대로 사용** |
 | `lib/cert/grade.test.mts` | 채점 테스트: `node --experimental-strip-types lib/cert/grade.test.mts` → `ALL PASS` |
